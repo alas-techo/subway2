@@ -5,6 +5,9 @@ import json
 
 app = Flask(__name__)
 
+from flask_cors import CORS
+CORS(app)
+
 with open("stations.json") as f:
     STATIONS = json.load(f)
 
@@ -45,4 +48,5 @@ def debug():
         "message": "scraper version is running",
         "has_bs4": "BeautifulSoup" in globals(),
     })
+
 
