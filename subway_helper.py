@@ -39,3 +39,10 @@ def arrivals():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+@app.route("/debug")
+def debug():
+    return jsonify({
+        "message": "scraper version is running",
+        "has_bs4": "BeautifulSoup" in globals(),
+    })
+
