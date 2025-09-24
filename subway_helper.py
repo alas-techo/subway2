@@ -1,3 +1,13 @@
+from flask import Flask, jsonify, request
+import requests
+from bs4 import BeautifulSoup
+import json
+
+app = Flask(__name__)
+
+with open("stations.json") as f:
+    STATIONS = json.load(f)
+
 @app.route("/arrivals")
 def arrivals():
     station_key = request.args.get("station")
@@ -14,7 +24,7 @@ def arrivals():
         times = []
         for tag in soup.select("li"):
             t = tag.get_text(strip=True)
-            if "|" in t:  # skip "Pick Station"
+            if "|" in t:  # only keep real train times, skip "Pick Station"
                 times.append(t)
             if len(times) >= 2:
                 break
@@ -26,3 +36,6 @@ def arrivals():
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
