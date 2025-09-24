@@ -1,16 +1,3 @@
-from flask import Flask, jsonify, request
-import requests
-from bs4 import BeautifulSoup
-import json
-
-app = Flask(__name__)
-
-from flask_cors import CORS
-CORS(app)
-
-with open("stations.json") as f:
-    STATIONS = json.load(f)
-
 @app.route("/arrivals")
 def arrivals():
     station_key = request.args.get("station")
@@ -24,30 +11,12 @@ def arrivals():
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "lxml")
 
-        times = []
-        for tag in soup.select("li.timeList, li"):
-            t = tag.get_text(strip=True)
-            if t:
-                times.append(t)
-            if len(times) >= 2:
-                break
+        # Debug: grab the first 10 <li> items so we can see what’s inside
+        debug_items = [li.get_text(strip=True) for li in soup.select("li")[:10]]
 
         return jsonify({
             "station": station_key,
-            "next": times[0] if len(times) > 0 else "-",
-            "following": times[1] if len(times) > 1 else "-"
+            "debug_items": debug_items
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-@app.route("/debug")
-def debug():
-    return jsonify({
-        "message": "scraper version is running",
-        "has_bs4": "BeautifulSoup" in globals(),
-    })
-
-
-
