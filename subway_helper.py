@@ -24,8 +24,9 @@ def arrivals():
         times = []
         for tag in soup.select("li"):
             t = tag.get_text(strip=True)
-            if "|" in t:  # only keep real train times, skip "Pick Station"
-                times.append(t)
+            if "|" in t:  # skip "Pick Station"
+                clean = t.split("|")[0].strip()  # keep only minutes
+                times.append(clean)
             if len(times) >= 2:
                 break
 
