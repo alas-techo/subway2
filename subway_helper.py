@@ -25,7 +25,7 @@ def arrivals():
         soup = BeautifulSoup(r.text, "lxml")
 
         times = []
-        for tag in soup.select("li.timeList"):
+        for tag in soup.select("li.timeList, li"):
             t = tag.get_text(strip=True)
             if t:
                 times.append(t)
@@ -48,5 +48,6 @@ def debug():
         "message": "scraper version is running",
         "has_bs4": "BeautifulSoup" in globals(),
     })
+
 
 
