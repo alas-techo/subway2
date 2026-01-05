@@ -1,0 +1,16 @@
+{
+  "go_train_go_van_cortlandt_park_242_st_station_1": {
+    "feed": "1",
+    "stop_id_n": "101N",
+    "stop_id_s": "101S",
+    "label": "Van Cortlandt-242",
+    "line": "1"
+  },
+  "go_train_go_vernon_blvd_jackson_av_station_7": {
+    "feed": "7",
+    "stop_id_n": "721N",
+    "stop_id_s": "721S",
+    "label": "Vernon/Jackson",
+    "line": "7"
+  }
+}
