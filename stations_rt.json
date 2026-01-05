@@ -7,10 +7,13 @@
     "line": "1"
   },
   "go_train_go_vernon_blvd_jackson_av_station_7": {
-    "feed": "7",
-    "stop_id_n": "721N",
-    "stop_id_s": "721S",
-    "label": "Vernon/Jackson",
-    "line": "7"
+  "feed": "7",
+  "stop_id_n": "721N",
+  "stop_id_s": "721S",
+  "line": "7",
+  "label": "Vernon/Jackson",
+  "label_n": "Queens-Bd",
+  "label_s": "Manhat-Bd"
+}
   }
 }
