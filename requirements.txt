@@ -4,3 +4,5 @@ requests
 beautifulsoup4
 lxml
 flask-cors
+Flask==3.0.3
+nyct-gtfs==2.0.0
