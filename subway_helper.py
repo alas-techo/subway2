@@ -10,22 +10,30 @@ app = Flask(__name__)
 with open("stations_rt.json", "r") as f:
     STATIONS = json.load(f)
 
-# Cache feeds so we don't hammer the MTA endpoints
+# Small cache so we don't re-download the feed on every request
 FEED_CACHE = {}  # feed_id -> {"ts": unix, "feed": NYCTFeed}
-CACHE_TTL_SEC = 8  # keep short; your ESP polls ~15s
+CACHE_TTL_SEC = 8
 
 
 def now_utc() -> int:
     return int(time.time())
 
 
+def dt_to_epoch_seconds(dt: datetime | None) -> int | None:
+    if not dt:
+        return None
+    # nyct-gtfs returns datetimes; if tz-naive, assume UTC
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
 def get_feed(feed_id: str) -> NYCTFeed:
-    entry = FEED_CACHE.get(feed_id)
     t = now_utc()
+    entry = FEED_CACHE.get(feed_id)
     if entry and (t - entry["ts"] <= CACHE_TTL_SEC):
         return entry["feed"]
 
-    # NYCTFeed pulls the official GTFS-RT feed for that line group (e.g. "1", "7")
     feed = NYCTFeed(feed_id)
     FEED_CACHE[feed_id] = {"ts": t, "feed": feed}
     return feed
@@ -33,39 +41,40 @@ def get_feed(feed_id: str) -> NYCTFeed:
 
 def next_two_arrivals(feed: NYCTFeed, stop_id: str, route_filter: str | None = None):
     """
-    Returns a sorted list of (arrival_epoch_sec, route_id) for the next arrivals at stop_id.
+    Returns next two arrival epoch seconds for a given stop_id (e.g. '721N').
+    nyct-gtfs exposes train.stop_time_updates as a LIST, so we iterate it.
     """
     tnow = now_utc()
-    arrivals = []
+    arrivals: list[int] = []
 
-    # nyct-gtfs gives you "trips" with stop time updates
-    for trip in feed.trips:
-        # Optional: only keep a specific route, e.g. "7" or "1"
-        if route_filter and trip.route_id != route_filter:
+    for train in feed.trips:
+        if route_filter and train.route_id != route_filter:
             continue
 
-        # trip.stop_time_updates is a dict keyed by stop_id (like "721N")
-        stu = trip.stop_time_updates.get(stop_id)
-        if not stu:
-            continue
+        # stop_time_updates is a LIST of StopTimeUpdate objects (not dict)
+        for stu in train.stop_time_updates:
+            if getattr(stu, "stop_id", None) != stop_id:
+                continue
 
-        # arrival time can be None; fallback to departure
-        arr = stu.arrival or stu.departure
-        if not arr:
-            continue
+            # Prefer arrival, fallback to departure
+            arr_dt = getattr(stu, "arrival", None) or getattr(stu, "departure", None)
+            arr_epoch = dt_to_epoch_seconds(arr_dt)
+            if arr_epoch is None:
+                continue
 
-        # keep only future-ish arrivals
-        if arr >= tnow - 5:
-            arrivals.append((arr, trip.route_id))
+            # Keep future arrivals (allow tiny negative for jitter)
+            if arr_epoch >= tnow - 5:
+                arrivals.append(arr_epoch)
 
-    arrivals.sort(key=lambda x: x[0])
+            # We found this stop for this train; no need to scan later STUs
+            break
+
+    arrivals.sort()
     return arrivals[:2]
 
 
-def format_minutes(epoch_sec: int) -> str:
-    # Convert to "Due"/minutes like your old API vibe
-    tnow = now_utc()
-    delta = max(0, epoch_sec - tnow)
+def format_minutes(arrival_epoch: int) -> str:
+    delta = max(0, arrival_epoch - now_utc())
     mins = int(round(delta / 60.0))
     if mins <= 0:
         return "Due"
@@ -78,8 +87,7 @@ def arrivals():
     if not station_key or station_key not in STATIONS:
         return jsonify({"error": "Invalid or missing station"}), 400
 
-    # Direction comes from your ESP/app later, but we can accept it now:
-    # dir=N or dir=S (optional). If omitted, default to S (downtown-ish).
+    # Accept dir=N|S (optional). Default S so your ESP keeps working with no change.
     direction = request.args.get("dir", "S").strip().upper()
     if direction not in ("N", "S"):
         direction = "S"
@@ -87,13 +95,13 @@ def arrivals():
     cfg = STATIONS[station_key]
     feed_id = str(cfg["feed"])
     stop_id = cfg["stop_id_n"] if direction == "N" else cfg["stop_id_s"]
-    route_filter = str(cfg.get("line") or "").strip() or None
+    route_filter = (str(cfg.get("line") or "").strip() or None)
 
     try:
         feed = get_feed(feed_id)
         arrs = next_two_arrivals(feed, stop_id, route_filter=route_filter)
 
-        if len(arrs) == 0:
+        if not arrs:
             return jsonify({
                 "station": station_key,
                 "dir": direction,
@@ -101,8 +109,8 @@ def arrivals():
                 "following": "-"
             })
 
-        next_txt = format_minutes(arrs[0][0])
-        foll_txt = format_minutes(arrs[1][0]) if len(arrs) > 1 else "-"
+        next_txt = format_minutes(arrs[0])
+        foll_txt = format_minutes(arrs[1]) if len(arrs) > 1 else "-"
 
         return jsonify({
             "station": station_key,
